@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Custom directories
+test_datasets
+
+# Entrypoint
+main.py
