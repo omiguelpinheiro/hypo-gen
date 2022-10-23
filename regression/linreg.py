@@ -16,16 +16,16 @@ class LinearRegression(WeightedModel):
 
     def __init__(
         self,
-        features_count: int,
+        samples: np.ndarray,
+        targets: np.ndarray,
         loss_func: MeanSquaredError = MeanSquaredError(),
         optimizer: Optimizer = GradientDescent(),
         seed: int | None = None,
     ):
         """
         Args:
-            features_count (int): The amount of features in the model,
-                this is used to create the weights of the linear
-                regression model.
+            samples (np.ndarray): The data that will be used to train the model.
+            targets (np.ndarray): The expected targets for the samples.
             loss_func (MeanSquaredError, optional): Which loss function
                 to use to determine how wrong the model is. Defaults to
                 MeanSquaredError().
@@ -34,59 +34,58 @@ class LinearRegression(WeightedModel):
             seed (int | None, optional): A random number generator
                 seed. Defaults to None.
         """
-        super().__init__(features_count, loss_func, optimizer, seed)
+        super().__init__(samples, targets, loss_func, optimizer, seed)
 
-    def solve(self, samples: np.ndarray, targets: np.ndarray):
-        """Find the weights that gives the smallest error analitically.
+    def solve(self):
+        """Find the weights that gives the smallest error analitically."""
+        self.weights = (
+            np.linalg.inv(self.samples.T @ self.samples) @ self.samples.T
+        ) @ self.targets
 
-        Args:
-            samples (np.ndarray): Data to be used as training examples.
-            targets (np.ndarray): Data to be used as training targets.
-        """
-        self.weights = (np.linalg.inv(samples.T @ samples) @ samples.T) @ targets
-
-    def fit(
-        self, samples: np.ndarray, targets: np.ndarray, epochs: int = 1000, quiet=True
-    ):
+    def fit(self, epochs: int = 1000, quiet=True):
         """Find the weights that gives the smallest error using the optimizer.
 
         Args:
-            samples (np.ndarray): Data to be used as training examples.
-            targets (np.ndarray): Data to be used as training targets.
             epochs (int, optional): The amount of weights updates
                 iterations. Defaults to 1000.
             quiet (bool, optional): if it should give feedback about
                 the training process. Defaults to True.
         """
         for epoch in range(epochs):
-            predictions = self.predict(samples)
-            grad = self.loss_func.grad(predictions, targets, samples)
+            predictions = self.predict(self.samples, has_dummy=True)
+            grad = self.loss_func.grad(predictions, self.targets, self.samples)
             self.weights = self.optimizer.optimize(self.weights, grad)
             if not quiet and epoch % 100 == 0:
-                print(self.loss(samples, targets))
+                print(self.loss(self.samples, self.targets, has_dummy=True))
 
-    def predict(self, samples: np.ndarray) -> np.ndarray:
+    def predict(self, samples: np.ndarray, has_dummy=False) -> np.ndarray:
         """Make predictions for the samples.
 
         Args:
             samples (np.ndarray): The samples which we want to use
                 to make the predictions.
+            has_dummy (bool): If the provided data already has
+                the dummy feature.
 
         Returns:
             np.ndarray: The models predictions for the given samples.
         """
+        if not has_dummy:
+            samples = self._add_dummy(samples)
         return samples @ self.weights
 
-    def loss(self, samples: np.ndarray, targets: np.ndarray) -> float:
+    def loss(self, samples: np.ndarray, targets: np.ndarray, has_dummy=False) -> float:
         """The model's loss for the samples.
 
         Args:
             samples (np.ndarray): The samples upon which the predictions
                 will be made.
             targets (np.ndarray): The expected target of the samples.
+            has_dummy (bool): If the provided data already has
+                the dummy feature.
 
         Returns:
             float: The model loss for the given samples.
         """
-        predictions = self.predict(samples)
+        predictions = self.predict(samples, has_dummy=has_dummy)
         return self.loss_func.eval(predictions, targets).sum() / len(targets)
